@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+<title>Secret Line — Ephemeral Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0B0E10;
+    --panel: #12161A;
+    --panel2: #181D22;
+    --border: #232A30;
+    --text: #D7DEE2;
+    --text-bright: #EDEFF0;
+    --muted: #5C6870;
+    --faint: #3E4750;
+    --green: #3DDC97;
+    --green-hover: #34c489;
+    --amber: #E8A855;
+    --red: #E8555A;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  #app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ---- shared screens (name / room) ---- */
+  .screen {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+    overflow-y: auto;
+  }
+  .card { width: 100%; max-width: 380px; }
+  .brand {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-bottom: 32px; color: var(--muted);
+    font-size: 10px; letter-spacing: 0.3em; text-transform: uppercase;
+  }
+  .brand svg { color: var(--green); }
+  h1 { font-size: 24px; color: var(--text-bright); margin: 0 0 4px; letter-spacing: -0.01em; }
+  .subtitle { color: var(--muted); font-size: 14px; margin: 0 0 32px; }
+  .back-btn {
+    background: none; border: none; color: var(--muted); font-size: 12px;
+    margin-bottom: 24px; cursor: pointer; padding: 0; font-family: inherit;
+  }
+  .back-btn:hover { color: #8B98A2; }
+
+  input[type="text"] {
+    width: 100%; background: var(--panel); border: 1px solid var(--border);
+    outline: none; border-radius: 6px; padding: 12px 16px; color: var(--text-bright);
+    font-family: inherit; font-size: 15px; transition: border-color 0.15s;
+  }
+  input[type="text"]::placeholder { color: var(--faint); }
+  input[type="text"]:focus { border-color: var(--green); }
+  input#room-input { text-align: center; letter-spacing: 0.3em; text-transform: uppercase; }
+  input#room-input:focus { border-color: var(--amber); }
+
+  button { font-family: inherit; cursor: pointer; border: none; }
+  .btn-primary {
+    margin-top: 16px; width: 100%; background: var(--green); color: var(--bg);
+    font-weight: 600; border-radius: 6px; padding: 12px; font-size: 15px;
+    transition: background 0.15s;
+  }
+  .btn-primary:hover { background: var(--green-hover); }
+  .btn-primary:disabled { background: #1D2A24; color: var(--faint); cursor: not-allowed; }
+
+  .btn-outline {
+    margin-top: 12px; width: 100%; background: transparent; border: 1px solid var(--amber);
+    color: var(--amber); font-weight: 600; border-radius: 6px; padding: 12px; font-size: 15px;
+    transition: background 0.15s;
+  }
+  .btn-outline:hover { background: rgba(232,168,85,0.1); }
+  .btn-outline:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .divider { display: flex; align-items: center; gap: 12px; margin: 24px 0; }
+  .divider .line { height: 1px; background: var(--border); flex: 1; }
+  .divider span { font-size: 10px; color: var(--faint); letter-spacing: 0.2em; }
+
+  .error-text { color: var(--red); font-size: 12px; margin-top: 16px; text-align: center; }
+
+  /* ---- chat screen ---- */
+  .chat-header {
+    border-bottom: 1px solid #1A1F24; padding: 12px 16px;
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+  .chat-header-left { display: flex; align-items: center; gap: 12px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .room-label { font-size: 10px; color: var(--text-bright); letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 2px; }
+  .room-code-btn {
+    background: none; display: flex; align-items: center; gap: 6px;
+    color: var(--text-bright); font-weight: 600; letter-spacing: 0.15em; font-size: 14px;
+  }
+  .room-code-btn:hover { opacity: 0.8; }
+  .leave-btn { display: flex; align-items: center; gap: 6px; background: none; color: var(--muted); font-size: 12px; }
+  .leave-btn:hover { color: var(--red); }
+
+  .notice {
+    display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+    background: var(--panel); border-bottom: 1px solid #1A1F24; flex-shrink: 0;
+  }
+  .notice svg { color: var(--faint); flex-shrink: 0; }
+  .notice p { font-size: 10px; color: var(--faint); line-height: 1.3; margin: 0; }
+
+  #messages { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .empty-hint { text-align: center; color: var(--faint); font-size: 12px; margin-top: 32px; }
+  .empty-hint span { color: var(--amber); }
+
+  .msg-row { display: flex; }
+  .msg-row.me { justify-content: flex-end; }
+  .msg-row.them { justify-content: flex-start; }
+  .msg-bubble { max-width: 75%; border-radius: 8px; padding: 10px 14px; }
+  .msg-bubble.me { background: var(--green); color: var(--bg); }
+  .msg-bubble.them { background: var(--panel2); color: var(--text); border: 1px solid var(--border); }
+  .msg-sender { font-size: 10px; color: var(--amber); font-weight: 600; margin-bottom: 2px; }
+  .msg-text { font-size: 14px; line-height: 1.4; word-break: break-word; white-space: pre-wrap; }
+  .msg-time { font-size: 9px; margin-top: 4px; text-align: right; }
+  .msg-time.me { color: rgba(11,14,16,0.5); }
+  .msg-time.them { color: var(--faint); }
+  .sys-msg { text-align: center; }
+  .sys-msg span { font-size: 10px; color: var(--faint); letter-spacing: 0.02em; }
+
+  .input-bar { border-top: 1px solid #1A1F24; padding: 12px; flex-shrink: 0; }
+  .input-row { display: flex; align-items: center; gap: 8px; }
+  #msg-input {
+    flex: 1; background: var(--panel); border: 1px solid var(--border);
+    outline: none; border-radius: 6px; padding: 10px 16px; color: var(--text-bright);
+    font-family: inherit; font-size: 14px;
+  }
+  #msg-input:focus { border-color: var(--green); }
+  #send-btn {
+    background: var(--green); color: var(--bg); border-radius: 6px; padding: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #send-btn:hover { background: var(--green-hover); }
+  #send-btn:disabled { background: #1D2A24; color: var(--faint); cursor: not-allowed; }
+
+  .typing-indicator {
+    display: flex; align-items: center; gap: 6px; padding: 4px 16px 0;
+    font-size: 11px; color: var(--text-bright); flex-shrink: 0; min-height: 18px;
+  }
+  .typing-dots { display: inline-flex; gap: 3px; }
+  .typing-dots span {
+    width: 4px; height: 4px; border-radius: 50%; background: var(--faint);
+    animation: typingBounce 1.2s infinite;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes typingBounce { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- NAME SCREEN -->
+  <div id="screen-name" class="screen">
+    <div class="card">
+      <div class="brand">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/></svg>
+        Secure Line
+      </div>
+      <h1>Who's speaking?</h1>
+      <p class="subtitle">No accounts. No history. Nothing saved after you leave.</p>
+      <input type="text" id="name-input" placeholder="enter your name" maxlength="24" />
+      <button class="btn-primary" id="name-continue-btn" disabled>Continue</button>
+    </div>
+  </div>
+
+  <!-- ROOM SCREEN -->
+  <div id="screen-room" class="screen hidden">
+    <div class="card">
+      <button class="back-btn" id="room-back-btn">&larr; back</button>
+      <h1 id="room-greeting">Hey.</h1>
+      <p class="subtitle">Start a new room or join one with a code.</p>
+      <button class="btn-primary" id="create-room-btn">Create a new room</button>
+      <div class="divider"><div class="line"></div><span>OR</span><div class="line"></div></div>
+      <input type="text" id="room-input" placeholder="ROOM CODE" maxlength="8" />
+      <button class="btn-outline" id="join-room-btn">Join room</button>
+      <p class="error-text hidden" id="room-error"></p>
+    </div>
+  </div>
+
+  <!-- CHAT SCREEN -->
+  <div id="screen-chat" class="hidden" style="height:100vh; height:100dvh; display:flex; flex-direction:column; overflow:hidden;">
+    <div class="chat-header">
+      <div class="chat-header-left">
+        <div class="dot"></div>
+        <div>
+          <div class="room-label">Room · <span id="online-count">1 online</span></div>
+          <button class="room-code-btn" id="copy-code-btn">
+            <span id="room-code-display"></span>
+            <svg id="copy-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button class="leave-btn" id="video-call-btn" style="color: var(--green); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          Video Call
+        </button>
+        <button class="leave-btn" id="leave-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Leave
+        </button>
+      </div>
+    </div>
+
+    <div id="reconnect-banner" class="notice hidden" style="background:#2A1416; border-bottom-color:#3A1C1E;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      <p style="color:var(--red);">Connection lost — reconnecting...</p>
+    </div>
+
+    <div class="notice">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.69 14a6.9 6.9 0 0 0 .31-2V5l-8-3-3.16 1.18"/><path d="M4.73 4.73L4 5v7c0 6 8 10 8 10a20.29 20.29 0 0 0 5.62-4.38"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      <p>Nothing here is saved. The room erases itself once everyone leaves.</p>
+    </div>
+
+    <div id="messages"></div>
+    <div id="typing-indicator" class="typing-indicator"></div>
+
+    <div class="input-bar">
+      <div class="input-row">
+        <input type="text" id="msg-input" placeholder="type a message..." />
+        <button id="send-btn" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Firebase compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- Firebase setup ----
+  var firebaseConfig = {
+    apiKey: "AIzaSyBU1Rf9EmOqvEybTi1hfoQxGr1oiOzg1Xw",
+    authDomain: "secret-chat-dd373.firebaseapp.com",
+    databaseURL: "https://secret-chat-dd373-default-rtdb.firebaseio.com",
+    projectId: "secret-chat-dd373",
+    storageBucket: "secret-chat-dd373.firebasestorage.app",
+    messagingSenderId: "260755124120",
+    appId: "1:260755124120:web:689f9b444077a87ee845ed"
+  };
+
+  var app, db;
+  try {
+    app = firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+  } catch (e) {
+    alert("Firebase failed to load: " + e.message);
+    return;
+  }
+
+  // ---- constants ----
+  var ONE_HOUR_MS = 60 * 60 * 1000;
+
+  // ---- state ----
+  var state = {
+    name: "",
+    roomCode: "",
+    myId: genId(),
+    msgListRef: null,
+    typingRef: null,
+    myTypingRef: null,
+    typingTimeout: null,
+    presenceRef: null,
+    connectedRef: null,
+    onlineCount: 1
+  };
+
+  function genId() {
+    return Math.random().toString(36).slice(2) + Date.now().toString(36);
+  }
+  function generateRoomCode() {
+    var chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    var code = "";
+    for (var i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+  }
+
+  // ---- DOM refs ----
+  var screenName = document.getElementById("screen-name");
+  var screenRoom = document.getElementById("screen-room");
+  var screenChat = document.getElementById("screen-chat");
+
+  var nameInput = document.getElementById("name-input");
+  var nameContinueBtn = document.getElementById("name-continue-btn");
+
+  var roomGreeting = document.getElementById("room-greeting");
+  var roomBackBtn = document.getElementById("room-back-btn");
+  var createRoomBtn = document.getElementById("create-room-btn");
+  var roomInput = document.getElementById("room-input");
+  var joinRoomBtn = document.getElementById("join-room-btn");
+  var roomError = document.getElementById("room-error");
+
+  var roomCodeDisplay = document.getElementById("room-code-display");
+  var onlineCountEl = document.getElementById("online-count");
+  var reconnectBanner = document.getElementById("reconnect-banner");
+  var copyCodeBtn = document.getElementById("copy-code-btn");
+  var copyIcon = document.getElementById("copy-icon");
+  var leaveBtn = document.getElementById("leave-btn");
+  var videoCallBtn = document.getElementById("video-call-btn");
+  var messagesEl = document.getElementById("messages");
+  var typingIndicatorEl = document.getElementById("typing-indicator");
+  var msgInput = document.getElementById("msg-input");
+  var sendBtn = document.getElementById("send-btn");
+
+  // ---- connection status (reconnect banner) ----
+  db.ref(".info/connected").on("value", function (snap) {
+    var connected = snap.val() === true;
+    reconnectBanner.classList.toggle("hidden", connected || !state.roomCode);
+  });
+
+  // ---- screen switching ----
+  function showScreen(id) {
+    screenName.classList.add("hidden");
+    screenRoom.classList.add("hidden");
+    screenChat.classList.add("hidden");
+    document.getElementById(id).classList.remove("hidden");
+  }
+
+  // ---- NAME SCREEN ----
+  nameInput.addEventListener("input", function () {
+    nameContinueBtn.disabled = nameInput.value.trim().length === 0;
+  });
+  nameInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && nameInput.value.trim()) goToRoomScreen();
+  });
+  nameContinueBtn.addEventListener("click", goToRoomScreen);
+
+  function goToRoomScreen() {
+    state.name = nameInput.value.trim();
+    if (!state.name) return;
+    roomGreeting.textContent = "Hey, " + state.name + ".";
+    showScreen("screen-room");
+    roomInput.focus();
+  }
+
+  // ---- ROOM SCREEN ----
+  roomBackBtn.addEventListener("click", function () {
+    roomError.classList.add("hidden");
+    showScreen("screen-name");
+    nameInput.focus();
+  });
+
+  roomInput.addEventListener("input", function () {
+    roomInput.value = roomInput.value.toUpperCase();
+    roomError.classList.add("hidden");
+  });
+  roomInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") handleJoinRoom();
+  });
+  joinRoomBtn.addEventListener("click", handleJoinRoom);
+  createRoomBtn.addEventListener("click", handleCreateRoom);
+
+  function setRoomError(msg) {
+    roomError.textContent = msg;
+    roomError.classList.remove("hidden");
+  }
+
+  function handleCreateRoom() {
+    createRoomBtn.disabled = true;
+    createRoomBtn.textContent = "Generating...";
+    enterRoom(generateRoomCode(), true);
+  }
+
+  function handleJoinRoom() {
+    var code = roomInput.value.trim().toUpperCase();
+    if (code.length < 4) {
+      setRoomError("Enter a valid room code.");
+      return;
+    }
+    joinRoomBtn.disabled = true;
+    enterRoom(code, false);
+  }
+
+  function enterRoom(code, isCreating) {
+    roomError.classList.add("hidden");
+    var roomRef = db.ref("rooms/" + code);
+    roomRef.get().then(function (snap) {
+      var data = snap.val();
+      var exists = snap.exists();
+
+      // room's grace period is over (everyone left 1hr+ ago) — wipe it, treat as fresh
+      if (exists && data.expiresAt && Date.now() >= data.expiresAt) {
+        return roomRef.remove().then(function () {
+          enterRoom(code, isCreating);
+        });
+      }
+
+      if (!isCreating && !exists) {
+        setRoomError("Room not found. Check the code and try again.");
+        joinRoomBtn.disabled = false;
+        return;
+      }
+      if (isCreating && exists) {
+        // collision, retry with a fresh code
+        return enterRoom(generateRoomCode(), true);
+      }
+
+      // someone's (re)joining within the grace window — cancel pending expiry
+      var setupTasks = [];
+      if (exists && data.expiresAt) {
+        setupTasks.push(roomRef.child("expiresAt").remove());
+      }
+
+      Promise.all(setupTasks).then(function () {
+        var myPresenceRef = db.ref("rooms/" + code + "/presence/" + state.myId);
+        myPresenceRef.set({
+          name: state.name,
+          joinedAt: firebase.database.ServerValue.TIMESTAMP,
+          lastReadTs: Date.now()
+        });
+        myPresenceRef.onDisconnect().remove();
+
+        state.presenceRef = db.ref("rooms/" + code + "/presence");
+        state.presenceRef.on("value", function (snap) {
+          var val = snap.val() || {};
+          state.presenceData = val;
+          state.onlineCount = Object.keys(val).length;
+          onlineCountEl.textContent = state.onlineCount + " online";
+          renderMessages(state.lastMessages || []);
+        });
+
+        var listRef = db.ref("rooms/" + code + "/messages");
+        listRef.push({ system: true, text: state.name + " joined the room", ts: Date.now() });
+
+        state.msgListRef = listRef;
+        listRef.on("value", function (snap) {
+          var val = snap.val() || {};
+          var list = Object.keys(val).map(function (id) {
+            var m = val[id];
+            m.id = id;
+            return m;
+          }).sort(function (a, b) { return a.ts - b.ts; });
+          state.lastMessages = list;
+          renderMessages(list);
+          markAsRead(list);
+        });
+
+        state.myTypingRef = db.ref("rooms/" + code + "/typing/" + state.myId);
+        state.myTypingRef.onDisconnect().remove();
+
+        state.typingRef = db.ref("rooms/" + code + "/typing");
+        state.typingRef.on("value", function (snap) {
+          var val = snap.val() || {};
+          var others = Object.keys(val)
+            .filter(function (id) { return id !== state.myId; })
+            .map(function (id) { return val[id].name; });
+          renderTypingIndicator(others);
+        });
+
+        state.roomCode = code;
+        roomCodeDisplay.textContent = code;
+        showScreen("screen-chat");
+        msgInput.focus();
+
+        createRoomBtn.disabled = false;
+        createRoomBtn.textContent = "Create a new room";
+        joinRoomBtn.disabled = false;
+      });
+    }).catch(function (err) {
+      setRoomError("Couldn't connect. Check your Firebase setup.");
+      createRoomBtn.disabled = false;
+      createRoomBtn.textContent = "Create a new room";
+      joinRoomBtn.disabled = false;
+      console.error(err);
+    });
+  }
+
+  // ---- CHAT SCREEN ----
+  function renderMessages(list) {
+    messagesEl.innerHTML = "";
+    if (list.length === 0) {
+      var hint = document.createElement("p");
+      hint.className = "empty-hint";
+      hint.innerHTML = 'Share code <span>' + state.roomCode + '</span> with your friend to start.';
+      messagesEl.appendChild(hint);
+      return;
+    }
+    list.forEach(function (m) {
+      if (m.system) {
+        var sys = document.createElement("div");
+        sys.className = "sys-msg";
+        var span = document.createElement("span");
+        span.textContent = m.text;
+        sys.appendChild(span);
+        messagesEl.appendChild(sys);
+        return;
+      }
+      var isMe = m.senderId ? m.senderId === state.myId : m.sender === state.name;
+      var row = document.createElement("div");
+      row.className = "msg-row " + (isMe ? "me" : "them");
+
+      var bubble = document.createElement("div");
+      bubble.className = "msg-bubble " + (isMe ? "me" : "them");
+
+      if (!isMe) {
+        var senderEl = document.createElement("div");
+        senderEl.className = "msg-sender";
+        senderEl.textContent = m.sender;
+        bubble.appendChild(senderEl);
+      }
+
+      var textEl = document.createElement("div");
+      textEl.className = "msg-text";
+      textEl.textContent = m.text;
+      bubble.appendChild(textEl);
+
+      var timeEl = document.createElement("div");
+      timeEl.className = "msg-time " + (isMe ? "me" : "them");
+      var d = new Date(m.ts);
+      var timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+      if (isMe) {
+        var others = Object.keys(state.presenceData || {}).filter(function (id) { return id !== state.myId; });
+        var seen = others.length > 0 && others.every(function (id) {
+          var p = state.presenceData[id];
+          return p && p.lastReadTs && p.lastReadTs >= m.ts;
+        });
+        timeEl.textContent = timeStr + (seen ? "  ✓✓ seen" : "  ✓ sent");
+      } else {
+        timeEl.textContent = timeStr;
+      }
+      bubble.appendChild(timeEl);
+
+      row.appendChild(bubble);
+      messagesEl.appendChild(row);
+    });
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function markAsRead(list) {
+    if (!state.roomCode || !list.length) return;
+    var lastTs = list[list.length - 1].ts;
+    db.ref("rooms/" + state.roomCode + "/presence/" + state.myId + "/lastReadTs").set(lastTs);
+  }
+
+  function renderTypingIndicator(names) {
+    if (!names.length) {
+      typingIndicatorEl.innerHTML = "";
+      return;
+    }
+    var label = names.length === 1
+      ? names[0] + " is typing"
+      : names.join(", ") + " are typing";
+    typingIndicatorEl.innerHTML = label +
+      '<span class="typing-dots"><span></span><span></span><span></span></span>';
+  }
+
+  function setTyping(isTyping) {
+    if (!state.myTypingRef) return;
+    if (isTyping) {
+      state.myTypingRef.set({ name: state.name, ts: firebase.database.ServerValue.TIMESTAMP });
+    } else {
+      state.myTypingRef.remove();
+    }
+  }
+
+  msgInput.addEventListener("input", function () {
+    sendBtn.disabled = msgInput.value.trim().length === 0;
+
+    setTyping(true);
+    clearTimeout(state.typingTimeout);
+    state.typingTimeout = setTimeout(function () { setTyping(false); }, 1500);
+  });
+  msgInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") sendMessage();
+  });
+  sendBtn.addEventListener("click", sendMessage);
+
+  function sendMessage() {
+    var text = msgInput.value.trim();
+    if (!text || !state.roomCode) return;
+    msgInput.value = "";
+    sendBtn.disabled = true;
+    clearTimeout(state.typingTimeout);
+    setTyping(false);
+    db.ref("rooms/" + state.roomCode + "/messages").push({
+      sender: state.name,
+      senderId: state.myId,
+      text: text,
+      ts: Date.now()
+    }).catch(function (err) {
+      console.error(err);
+    });
+  }
+
+  videoCallBtn.addEventListener("click", function () {
+    if (!state.roomCode) return;
+    var jitsiRoom = "SecretLine-" + state.roomCode;
+    window.open("https://meet.jit.si/" + jitsiRoom, "_blank");
+  });
+
+  copyCodeBtn.addEventListener("click", function () {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(state.roomCode).catch(function () {});
+    }
+    copyIcon.innerHTML = '<polyline points="20 6 9 17 4 12"></polyline>';
+    setTimeout(function () {
+      copyIcon.innerHTML = '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>';
+    }, 1500);
+  });
+
+  function cleanupRoom(code, callback) {
+    if (!code) { if (callback) callback(); return; }
+    db.ref("rooms/" + code + "/presence").get().then(function (snap) {
+      var presence = snap.val() || {};
+      var remaining = Object.keys(presence).filter(function (id) { return id !== state.myId; });
+      var task;
+      if (remaining.length === 0) {
+        // last one out — don't nuke the room, just start a 1hr countdown.
+        // if nobody re-enters this code before it lapses, it gets wiped on next attempted entry.
+        task = db.ref("rooms/" + code + "/presence/" + state.myId).remove()
+          .then(function () {
+            return db.ref("rooms/" + code + "/expiresAt").set(Date.now() + ONE_HOUR_MS);
+          });
+      } else {
+        task = db.ref("rooms/" + code + "/presence/" + state.myId).remove();
+      }
+      task.then(function () { if (callback) callback(); }).catch(function () { if (callback) callback(); });
+    }).catch(function () { if (callback) callback(); });
+  }
+
+  leaveBtn.addEventListener("click", function () {
+    var code = state.roomCode;
+    if (state.msgListRef) {
+      state.msgListRef.off();
+      state.msgListRef = null;
+    }
+    if (state.typingRef) {
+      state.typingRef.off();
+      state.typingRef = null;
+    }
+    if (state.presenceRef) {
+      state.presenceRef.off();
+      state.presenceRef = null;
+    }
+    clearTimeout(state.typingTimeout);
+    setTyping(false);
+    state.myTypingRef = null;
+    state.lastMessages = [];
+    state.presenceData = {};
+    state.onlineCount = 1;
+    typingIndicatorEl.innerHTML = "";
+    db.ref("rooms/" + code + "/messages").push({
+      system: true, text: state.name + " left the room", ts: Date.now()
+    }).finally(function () {
+      cleanupRoom(code, function () {
+        state.roomCode = "";
+        state.name = "";
+        messagesEl.innerHTML = "";
+        roomInput.value = "";
+        msgInput.value = "";
+        nameInput.value = "";
+        nameContinueBtn.disabled = true;
+        reconnectBanner.classList.add("hidden");
+        showScreen("screen-name");
+        nameInput.focus();
+      });
+    });
+  });
+
+  window.addEventListener("beforeunload", function () {
+    if (state.roomCode) {
+      // best-effort synchronous-ish cleanup; onDisconnect() also covers this server-side
+      cleanupRoom(state.roomCode);
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
